@@ -4,15 +4,31 @@
 # switching to `pip install -r requirements.txt` in the CI workflow.
 name: automated-evaluator
 channels:
-  - defaults
+  - pytorch
   - conda-forge
+  - defaults
 dependencies:
   - python=3.11
   - pip
+
+# Conda-managed PyTorch options
+#
+# Option A — CPU-only (recommended for CI runners without GPUs):
+#   keeps builds simple and avoids CUDA toolkits.
+#   Uncomment the `pytorch` entry below and ensure the `pytorch` channel is present.
+  - pytorch=2.11.0  # CPU build from the `pytorch` channel
+
+# Option B — CUDA-enabled (for GPU runners):
+#   If your runner provides CUDA (or you use self-hosted GPU runners),
+#   replace the `pytorch=2.11.0` line above with the following two lines:
+#   - pytorch=2.11.0
+#   - cudatoolkit=11.8
+#   Adjust `cudatoolkit` version to match the GPU driver/CUDA compatibility of your runner.
+
+# The rest of the Python dependencies are installed via pip to match the project's venv.
   - pip:
     - numpy==2.4.3
     - pandas==3.0.1
-    - torch==2.11.0
     - pytest==9.0.2
     - filelock==3.25.2
     - fsspec==2026.2.0
