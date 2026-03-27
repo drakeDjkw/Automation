@@ -31,6 +31,7 @@ jobs:
 
       - name: Run tests
         run: |
+          cd Automated_Evaluator
           python -m pytest -q
 
   conda-test:
@@ -63,6 +64,7 @@ jobs:
           source $(conda info --base)/etc/profile.d/conda.sh
           conda activate ci-env
           python -m pip install --upgrade pip
+          cd Automated_Evaluator
           python -m pytest -q
 
   gpu-test:
@@ -92,10 +94,11 @@ jobs:
 
       - name: Run tests (GPU)
         run: |
+          cd Automated_Evaluator
           python -m pytest -q
 
   smoke-validation:
-    name: Smoke: run validations and upload summary
+    name: "Smoke: run validations and upload summary"
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -113,28 +116,30 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
           pip install -r requirements.txt
 
-      - name: Prepare smoke weights & mapping
-        run: |
-          python - <<'PY'
-import os, json
-from importlib import import_module
-try:
-    mc = import_module('models.convlstm')
-    model = mc.ConvLSTM()
-    os.makedirs('models', exist_ok=True)
-    import torch
-    torch.save(model.state_dict(), 'models/convlstm_ci_smoke.pth')
-    os.makedirs('tests', exist_ok=True)
-    mapping = {'convlstm_ci_smoke': {'module': 'models.convlstm', 'class': 'ConvLSTM'}}
-    with open('tests/mapping_ci.json','w') as f:
-        json.dump(mapping, f)
-    print('Created smoke weights and mapping')
-except Exception as e:
-    print('Could not create smoke weights:', e)
-PY
+    - name: Prepare smoke weights & mapping
+    run: |
+      cd Automated_Evaluator
+      python - <<'PY'
+      import os, json
+      from importlib import import_module
+      try:
+        mc = import_module('models.convlstm')
+        model = mc.ConvLSTM()
+        os.makedirs('models', exist_ok=True)
+        import torch
+        torch.save(model.state_dict(), 'models/convlstm_ci_smoke.pth')
+        os.makedirs('tests', exist_ok=True)
+        mapping = {'convlstm_ci_smoke': {'module': 'models.convlstm', 'class': 'ConvLSTM'}}
+        with open('tests/mapping_ci.json','w') as f:
+          json.dump(mapping, f)
+        print('Created smoke weights and mapping')
+      except Exception as e:
+        print('Could not create smoke weights:', e)
+      PY
 
       - name: Run validations (smoke)
         run: |
+          cd Automated_Evaluator
           python run_validations.py --mapping tests/mapping_ci.json || true
 
       - name: Upload summary.csv artifact
