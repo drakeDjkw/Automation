@@ -87,10 +87,3 @@ pytest==9.0.2
 
 Closing notes
 -------------
-All tests passed in the environment created during this session. If you want, I can:
-
-- Add a `requirements.txt` with the exact pins and update `README.md` with the install instructions (I can do that next).  
-- Commit these changes to a branch and open a PR (if you want a code review workflow).  
-- Create a short `setup_env.sh` script to automate environment creation and dependency installation.
-
-If you'd like me to proceed with any of those items, tell me which one and I'll implement it.
