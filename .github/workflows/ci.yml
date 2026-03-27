@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ '3.11', '3.14' ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies (pip + explicit torch wheel)
         run: |
@@ -60,4 +63,33 @@ jobs:
           source $(conda info --base)/etc/profile.d/conda.sh
           conda activate ci-env
           python -m pip install --upgrade pip
+          python -m pytest -q
+
+  gpu-test:
+    name: GPU CI (self-hosted)
+    # This job is intended to run on self-hosted runners with GPUs.
+    # It will be skipped on hosted runners that don't expose a matching label.
+    runs-on: [ self-hosted, gpu ]
+    needs: test
+    strategy:
+      matrix:
+        python-version: [ '3.11' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies (CUDA PyTorch wheel + rest)
+        run: |
+          python -m pip install --upgrade pip
+          # Install CUDA-enabled PyTorch wheel from PyTorch index; adjust cu version to match your runners.
+          python -m pip install --index-url https://download.pytorch.org/whl/cu118 torch==2.11.0
+          pip install -r requirements.txt
+
+      - name: Run tests (GPU)
+        run: |
           python -m pytest -q
