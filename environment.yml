@@ -16,7 +16,7 @@ dependencies:
 # Option A — CPU-only (recommended for CI runners without GPUs):
 #   keeps builds simple and avoids CUDA toolkits.
 #   Uncomment the `pytorch` entry below and ensure the `pytorch` channel is present.
-  - pytorch=2.11.0  # CPU build from the `pytorch` channel
+  - pytorch::pytorch=2.11.0  # CPU build from the `pytorch` channel (channel-qualified)
 
 # Option B — CUDA-enabled (for GPU runners):
 #   If your runner provides CUDA (or you use self-hosted GPU runners),

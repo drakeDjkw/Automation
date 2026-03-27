@@ -18,12 +18,46 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install dependencies (pip + explicit torch wheel)
         run: |
           python -m pip install --upgrade pip
-          # Use requirements.txt instead of conda env to keep CI simple and portable
+          # Install CPU-only PyTorch wheel from official PyTorch index (ensures correct platform wheel)
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
+          # Then install the rest of the pinned deps
           pip install -r requirements.txt
 
       - name: Run tests
         run: |
+          python -m pytest -q
+
+  conda-test:
+    name: CI (conda env from environment.yml)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: 3.11
+
+      - name: Configure conda channels
+        run: |
+          conda config --add channels conda-forge
+          conda config --add channels pytorch
+          conda config --set channel_priority strict
+
+      - name: Create/update environment (verbose)
+        run: |
+          # Create environment named 'ci-env' to avoid touching base
+          conda env update --file environment.yml --name ci-env -v || conda env create -f environment.yml -n ci-env -v
+
+      - name: Activate conda env and run tests
+        shell: bash -l {0}
+        run: |
+          source $(conda info --base)/etc/profile.d/conda.sh
+          conda activate ci-env
+          python -m pip install --upgrade pip
           python -m pytest -q
