@@ -1,0 +1,4 @@
+{
+  "convlstm": { "module": "models.convlstm", "class": "ConvLSTM" },
+  "gan": { "module": "models.gan", "class": "GAN" }
+}
