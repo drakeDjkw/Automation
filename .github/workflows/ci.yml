@@ -5,306 +5,160 @@ on:
 
   on:
     push:
-      branches: [ main ]
-    pull_request:
-      branches: [ main ]
+      name: CI (pytest)
 
-  jobs:
-    test:
-      runs-on: ${{ matrix.os }}
-      strategy:
-        matrix:
-          os: [ ubuntu-latest, macos-latest ]
-          python-version: [ '3.11', '3.14' ]
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+      on:
+        push:
+          branches: [ main ]
+        pull_request:
+          branches: [ main ]
 
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: ${{ matrix.python-version }}
+      env:
+        # Opt into Node.js 24 for JavaScript actions (see GitHub deprecation notice)
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
-        - name: Display runner info
-          run: |
-            echo "Running on: ${{ matrix.os }}"
-            uname -a || sw_vers || lsb_release -a || true
-
-        - name: Install dependencies (pip + explicit torch wheel)
-          run: |
-            python -m pip install --upgrade pip
-            # Install CPU-only PyTorch wheel from official PyTorch index
-            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
-            pip install -r requirements.txt
-
-        - name: Run tests
-          run: |
-            cd Automated_Evaluator
-            python -m pytest -q
-
-    conda-test:
-      name: CI (conda env from environment.yml)
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: Setup Miniconda
-          uses: conda-incubator/setup-miniconda@v2
-          with:
-            auto-update-conda: true
-            python-version: 3.11
-
-        - name: Configure conda channels
-          run: |
-            conda config --add channels conda-forge
-            conda config --add channels pytorch
-            conda config --set channel_priority strict
-
-        - name: Create/update environment (verbose)
-          run: |
-            # Create environment named 'ci-env' to avoid touching base
-            conda env update --file environment.yml --name ci-env -v || conda env create -f environment.yml -n ci-env -v
-
-        - name: Activate conda env and run tests
-          shell: bash -l {0}
-          run: |
-            source $(conda info --base)/etc/profile.d/conda.sh
-            conda activate ci-env
-            python -m pip install --upgrade pip
-            cd Automated_Evaluator
-            python -m pytest -q
-
-    gpu-test:
-      name: GPU CI (self-hosted)
-      # This job is intended to run on self-hosted runners with GPUs.
-      # It will be skipped on hosted runners that don't expose a matching label.
-      runs-on: [ self-hosted, gpu ]
-      needs: test
-      strategy:
-        matrix:
-          python-version: [ '3.11' ]
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: ${{ matrix.python-version }}
-
-        - name: Install dependencies (CUDA PyTorch wheel + rest)
-          run: |
-            python -m pip install --upgrade pip
-            # Install CUDA-enabled PyTorch wheel from PyTorch index; adjust cu version to match your runners.
-            python -m pip install --index-url https://download.pytorch.org/whl/cu118 torch==2.11.0
-            pip install -r requirements.txt
-
-        - name: Run tests (GPU)
-          run: |
-            cd Automated_Evaluator
-            python -m pytest -q
-
-    smoke-validation:
-      name: "Smoke: run validations and upload summary"
-      runs-on: ubuntu-latest
-      needs: test
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: '3.11'
-
-        - name: Install dependencies (pip + explicit torch wheel)
-          run: |
-            python -m pip install --upgrade pip
-            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
-            pip install -r requirements.txt
-
-        - name: Prepare smoke weights & mapping
-          run: |
-            cd Automated_Evaluator
-            python - <<'PY'
-              import os, json
-              from importlib import import_module
-              try:
-                  mc = import_module('models.convlstm')
-                  model = mc.ConvLSTM()
-                  os.makedirs('models', exist_ok=True)
-                  import torch
-                  torch.save(model.state_dict(), 'models/convlstm_ci_smoke.pth')
-                  os.makedirs('tests', exist_ok=True)
-                  mapping = {'convlstm_ci_smoke': {'module': 'models.convlstm', 'class': 'ConvLSTM'}}
-                  with open('tests/mapping_ci.json','w') as f:
-                      json.dump(mapping, f)
-                  print('Created smoke weights and mapping')
-              except Exception as e:
-                  print('Could not create smoke weights:', e)
-            PY
-
-        - name: Run validations (smoke)
-          run: |
-            cd Automated_Evaluator
-            python run_validations.py --mapping tests/mapping_ci.json || true
-
-        - name: Upload summary.csv artifact
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: validation-summary
-            path: results/summary.csv
-
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, macos-latest ]
-        python-version: [ '3.11', '3.14' ]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Display runner info
-        run: |
-          echo "Running on: ${{ matrix.os }}"
-          uname -a || sw_vers || lsb_release -a || true
-
-      - name: Install dependencies (pip + explicit torch wheel)
-        run: |
-          python -m pip install --upgrade pip
-          # Install CPU-only PyTorch wheel from official PyTorch index (ensures correct platform wheel)
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
-          # Then install the rest of the pinned deps
-          pip install -r requirements.txt
-
-      - name: Run tests
-        run: |
-          cd Automated_Evaluator
-          python -m pytest -q
-
-  conda-test:
-    name: CI (conda env from environment.yml)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          auto-update-conda: true
-          python-version: 3.11
-
-      - name: Configure conda channels
-        run: |
-          conda config --add channels conda-forge
+      jobs:
+        test:
           runs-on: ${{ matrix.os }}
-          conda config --add channels pytorch
-          conda config --set channel_priority strict
+          strategy:
+            matrix:
+              os: [ ubuntu-latest, macos-latest ]
+              python-version: [ '3.11', '3.14' ]
+          steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Create/update environment (verbose)
-        run: |
-          # Create environment named 'ci-env' to avoid touching base
-          conda env update --file environment.yml --name ci-env -v || conda env create -f environment.yml -n ci-env -v
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                python-version: ${{ matrix.python-version }}
 
-      - name: Activate conda env and run tests
-        shell: bash -l {0}
-        run: |
-          source $(conda info --base)/etc/profile.d/conda.sh
-          conda activate ci-env
-          python -m pip install --upgrade pip
-          cd Automated_Evaluator
-          python -m pytest -q
+            - name: Display runner info
+              run: |
+                echo "Running on: ${{ matrix.os }}"
+                uname -a || sw_vers || lsb_release -a || true
 
-  gpu-test:
-    name: GPU CI (self-hosted)
-    # This job is intended to run on self-hosted runners with GPUs.
-    # It will be skipped on hosted runners that don't expose a matching label.
-    runs-on: [ self-hosted, gpu ]
-    needs: test
-    strategy:
-      matrix:
-        python-version: [ '3.11' ]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Install dependencies (pip + explicit torch wheel)
+              run: |
+                python -m pip install --upgrade pip
+                # CPU-only PyTorch wheel
+                python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
+                pip install -r requirements.txt
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+            - name: Run tests
+              run: |
+                cd Automated_Evaluator
+                python -m pytest -q
 
-      - name: Install dependencies (CUDA PyTorch wheel + rest)
-        run: |
-          python -m pip install --upgrade pip
-          # Install CUDA-enabled PyTorch wheel from PyTorch index; adjust cu version to match your runners.
-          python -m pip install --index-url https://download.pytorch.org/whl/cu118 torch==2.11.0
-          pip install -r requirements.txt
+        conda-test:
+          name: CI (conda env from environment.yml)
+          runs-on: ubuntu-latest
+          steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Run tests (GPU)
-        run: |
-          cd Automated_Evaluator
-          python -m pytest -q
+            - name: Setup Miniconda
+              uses: conda-incubator/setup-miniconda@v2
+              with:
+                auto-update-conda: true
+                python-version: 3.11
 
-  smoke-validation:
-    name: "Smoke: run validations and upload summary"
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Configure conda channels
+              run: |
+                conda config --add channels conda-forge
+                conda config --add channels pytorch
+                conda config --set channel_priority strict
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+            - name: Create/update environment (verbose)
+              run: |
+                conda env update --file environment.yml --name ci-env -v || conda env create -f environment.yml -n ci-env -v
 
-      - name: Install dependencies (pip + explicit torch wheel)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
-          pip install -r requirements.txt
+            - name: Activate conda env and run tests
+              shell: bash -l {0}
+              run: |
+                source $(conda info --base)/etc/profile.d/conda.sh
+                conda activate ci-env
+                python -m pip install --upgrade pip
+                cd Automated_Evaluator
+                python -m pytest -q
 
-    - name: Prepare smoke weights & mapping
-    run: |
-      cd Automated_Evaluator
-      python - <<'PY'
-      import os, json
-      from importlib import import_module
-      try:
-        mc = import_module('models.convlstm')
-        model = mc.ConvLSTM()
-        os.makedirs('models', exist_ok=True)
-        import torch
-        torch.save(model.state_dict(), 'models/convlstm_ci_smoke.pth')
-        os.makedirs('tests', exist_ok=True)
-        mapping = {'convlstm_ci_smoke': {'module': 'models.convlstm', 'class': 'ConvLSTM'}}
-        with open('tests/mapping_ci.json','w') as f:
-          json.dump(mapping, f)
-        print('Created smoke weights and mapping')
-      except Exception as e:
-        print('Could not create smoke weights:', e)
-      PY
+        gpu-test:
+          name: GPU CI (self-hosted)
+          runs-on: [ self-hosted, gpu ]
+          needs: test
+          strategy:
+            matrix:
+              python-version: [ '3.11' ]
+          steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Run validations (smoke)
-        run: |
-          cd Automated_Evaluator
-          python run_validations.py --mapping tests/mapping_ci.json || true
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                python-version: ${{ matrix.python-version }}
 
-      - name: Upload summary.csv artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-summary
-          path: results/summary.csv
+            - name: Install dependencies (CUDA PyTorch wheel + rest)
+              run: |
+                python -m pip install --upgrade pip
+                # Adjust CUDA version to match your runners
+                python -m pip install --index-url https://download.pytorch.org/whl/cu118 torch==2.11.0
+                pip install -r requirements.txt
+
+            - name: Run tests (GPU)
+              run: |
+                cd Automated_Evaluator
+                python -m pytest -q
+
+        smoke-validation:
+          name: Smoke: run validations and upload summary
+          runs-on: ubuntu-latest
+          needs: test
+          steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                python-version: '3.11'
+
+            - name: Install dependencies (pip + explicit torch wheel)
+              run: |
+                python -m pip install --upgrade pip
+                python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0
+                pip install -r requirements.txt
+
+            - name: Prepare smoke weights & mapping
+              run: |
+                cd Automated_Evaluator
+                python - <<'PY'
+                import os, json
+                from importlib import import_module
+                try:
+                    mc = import_module('models.convlstm')
+                    model = mc.ConvLSTM()
+                    os.makedirs('models', exist_ok=True)
+                    import torch
+                    torch.save(model.state_dict(), 'models/convlstm_ci_smoke.pth')
+                    os.makedirs('tests', exist_ok=True)
+                    mapping = {'convlstm_ci_smoke': {'module': 'models.convlstm', 'class': 'ConvLSTM'}}
+                    with open('tests/mapping_ci.json','w') as f:
+                        json.dump(mapping, f)
+                    print('Created smoke weights and mapping')
+                except Exception as e:
+                    print('Could not create smoke weights:', e)
+                PY
+
+            - name: Run validations (smoke)
+              run: |
+                cd Automated_Evaluator
+                python run_validations.py --mapping tests/mapping_ci.json || true
+
+            - name: Upload summary.csv artifact
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                name: validation-summary
+                path: results/summary.csv
+                          - name: Run tests (GPU)

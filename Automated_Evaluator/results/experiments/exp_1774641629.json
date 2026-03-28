@@ -1,0 +1,16 @@
+{
+    "experiment_id": "exp_1774641629",
+    "timestamp": "Sat Mar 28 04:00:29 2026",
+    "config": {
+        "model": "ConvLSTM",
+        "weights": "/Users/sandrakhyikwa/project-managements/Automation/Automated_Evaluator/models/convlstm_smoke_test.pth",
+        "dataset": "data/rainfall.npy",
+        "batch_size": 4
+    },
+    "metrics": {
+        "MAE": 0.8657838106155396,
+        "RMSE": 0.9167086482048035,
+        "num_samples": 5,
+        "runtime_sec": 0.0015048980712890625
+    }
+}
